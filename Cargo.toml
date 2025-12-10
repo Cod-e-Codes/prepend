@@ -1,0 +1,14 @@
+[package]
+name = "prepend"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Cod-e-Codes/prepend"
+
+[dependencies]
+
+[dev-dependencies]
+assert_cmd = "2.1.1"
+tempfile = "3.23.0"
+predicates = "3.1.3"
+
