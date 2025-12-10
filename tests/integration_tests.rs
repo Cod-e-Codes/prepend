@@ -3,12 +3,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
+use prepend::constants::ALLOWED_EXTENSIONS;
 use prepend::{Config, perform_prepend, validate_file};
-
-const ALLOWED_EXTENSIONS: &[&str] = &[
-    "txt", "log", "md", "sh", "conf", "yaml", "json", "csv", "cfg", "ini", "c", "cpp", "h", "py",
-    "js", "rs",
-];
 
 #[test]
 fn test_prepend_to_empty_file() {
@@ -85,7 +81,7 @@ fn test_nonexistent_file() {
     let path = PathBuf::from("/tmp/nonexistent_file_12345.txt");
     let result = validate_file(&path);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("does not exist"));
+    assert!(result.unwrap_err().to_string().contains("does not exist"));
 }
 
 #[test]
@@ -93,7 +89,12 @@ fn test_directory_instead_of_file() {
     let dir = tempfile::tempdir().unwrap();
     let result = validate_file(dir.path());
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("not a regular file"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("not a regular file")
+    );
 }
 
 #[test]
@@ -110,7 +111,7 @@ fn test_readonly_file() {
 
     let result = validate_file(path);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("not writable"));
+    assert!(result.unwrap_err().to_string().contains("not writable"));
 }
 
 #[test]

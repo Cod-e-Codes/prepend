@@ -1,14 +1,9 @@
+use prepend::constants::{GREEN, RED, RESET, YELLOW};
 use prepend::{parse_arguments, perform_prepend, validate_file};
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::process;
-
-// --- ANSI Colors ---
-const RED: &str = "\x1b[31m";
-const GREEN: &str = "\x1b[32m";
-const YELLOW: &str = "\x1b[33m";
-const RESET: &str = "\x1b[0m";
 
 fn main() {
     let args: Vec<String> = env::args().collect();

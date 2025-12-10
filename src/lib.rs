@@ -1,28 +1,56 @@
+//! A library for safely prepending text to files.
+//!
+//! This library provides functionality to prepend text to the beginning of files
+//! using buffered I/O and atomic file operations to ensure data safety.
+
+pub mod constants;
+pub mod error;
+
+use constants::{ALLOWED_EXTENSIONS, BLUE, BUFFER_SIZE, RESET, YELLOW};
+use error::PrependError;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 
-// --- ANSI Colors ---
-const YELLOW: &str = "\x1b[33m";
-const BLUE: &str = "\x1b[34m";
-const RESET: &str = "\x1b[0m";
-
-// --- Configuration ---
-const ALLOWED_EXTENSIONS: &[&str] = &[
-    "txt", "log", "md", "sh", "conf", "yaml", "json", "csv", "cfg", "ini", "c", "cpp", "h", "py",
-    "js", "rs",
-];
-const BUFFER_SIZE: usize = 64 * 1024; // 64KB Buffer for large files
-
+/// Configuration for the prepend operation.
+///
+/// Contains all the parameters needed to perform a prepend operation,
+/// including the target file, text to prepend, and execution mode.
 pub struct Config {
+    /// Path to the file to be modified
     pub filename: PathBuf,
+    /// Text to prepend to the file
     pub prepend_text: String,
+    /// If true, show what would happen without modifying the file
     pub dry_run: bool,
 }
 
-pub fn parse_arguments(args: &[String]) -> Result<Config, String> {
+/// Parses command-line arguments into a configuration.
+///
+/// # Arguments
+///
+/// * `args` - Command-line arguments including the program name
+///
+/// # Returns
+///
+/// * `Ok(Config)` - Successfully parsed configuration
+/// * `Err(PrependError)` - Error parsing arguments or reading input
+///
+/// # Modes
+///
+/// - **Interactive mode**: If only filename is provided, prompts for text input
+/// - **Argument mode**: If filename and text are provided, uses the text argument
+///
+/// # Examples
+///
+/// ```no_run
+/// use prepend::parse_arguments;
+/// let args = vec!["prepend".to_string(), "file.txt".to_string()];
+/// let config = parse_arguments(&args).unwrap();
+/// ```
+pub fn parse_arguments(args: &[String]) -> Result<Config, PrependError> {
     let mut filename = None;
     let mut text_arg = None;
     let mut dry_run = false;
@@ -66,11 +94,9 @@ pub fn parse_arguments(args: &[String]) -> Result<Config, String> {
         );
         println!("----------------------------------------------");
         let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .map_err(|e| e.to_string())?;
+        io::stdin().read_to_string(&mut buffer)?;
         if buffer.trim().is_empty() {
-            return Err("Input text is empty.".to_string());
+            return Err(PrependError::EmptyInput);
         }
         // Ensure the input ends with a newline so it doesn't merge with the first line of the file
         if !buffer.ends_with('\n') {
@@ -86,17 +112,32 @@ pub fn parse_arguments(args: &[String]) -> Result<Config, String> {
     })
 }
 
-pub fn validate_file(path: &Path) -> Result<(), String> {
+/// Validates that a file exists, is a regular file, and is writable.
+///
+/// # Arguments
+///
+/// * `path` - Path to the file to validate
+///
+/// # Returns
+///
+/// * `Ok(())` - File is valid and ready for prepending
+/// * `Err(PrependError)` - File validation failed
+///
+/// # Warnings
+///
+/// Prints a warning to stdout if the file has an uncommon extension,
+/// but does not fail validation.
+pub fn validate_file(path: &Path) -> Result<(), PrependError> {
     if !path.exists() {
-        return Err(format!("File {:?} does not exist.", path));
+        return Err(PrependError::FileNotFound(format!("{:?}", path)));
     }
     if !path.is_file() {
-        return Err(format!("{:?} is not a regular file.", path));
+        return Err(PrependError::NotAFile(format!("{:?}", path)));
     }
 
     // Permission check (basic write check)
     if OpenOptions::new().write(true).open(path).is_err() {
-        return Err(format!("File {:?} is not writable.", path));
+        return Err(PrependError::NotWritable(format!("{:?}", path)));
     }
 
     // Extension check
@@ -113,7 +154,28 @@ pub fn validate_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn perform_prepend(config: &Config) -> io::Result<()> {
+/// Performs the prepend operation on a file.
+///
+/// This function safely prepends text to a file using the following strategy:
+/// 1. Creates a temporary file in the same directory
+/// 2. Writes the prepend text to the temporary file
+/// 3. Streams the original file content to the temporary file
+/// 4. Atomically replaces the original file with the temporary file
+///
+/// # Arguments
+///
+/// * `config` - Configuration containing the file path and text to prepend
+///
+/// # Returns
+///
+/// * `Ok(())` - Prepend operation completed successfully
+/// * `Err(PrependError)` - I/O error occurred during the operation
+///
+/// # Safety
+///
+/// This function uses atomic file operations to minimize the risk of data loss.
+/// If the operation fails, the temporary file is cleaned up automatically.
+pub fn perform_prepend(config: &Config) -> Result<(), PrependError> {
     let source_path = &config.filename;
 
     // Create a temp file in the SAME DIRECTORY as the source.
@@ -144,11 +206,16 @@ pub fn perform_prepend(config: &Config) -> io::Result<()> {
         Err(e) => {
             // Cleanup temp file if rename fails
             let _ = fs::remove_file(&temp_path);
-            Err(e)
+            Err(PrependError::Io(e))
         }
     }
 }
 
+/// Prints help information for the command-line tool.
+///
+/// # Arguments
+///
+/// * `prog_name` - Name of the program executable
 pub fn print_help(prog_name: &str) {
     println!(
         "{}Usage:{} {} [OPTIONS] <filename> [text]",

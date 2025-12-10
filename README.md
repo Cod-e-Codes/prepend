@@ -73,8 +73,10 @@ prepend app.log "--- Session started ---"
 ```
 prepend/
 ├── src/
-│   ├── main.rs      # Binary entry point
-│   └── lib.rs       # Core library implementation
+│   ├── main.rs       # Binary entry point
+│   ├── lib.rs        # Core library implementation
+│   ├── constants.rs  # Shared constants (ANSI colors, allowed extensions)
+│   └── error.rs      # Custom error types
 ├── tests/
 │   ├── cli_tests.rs         # End-to-end CLI tests (12 tests)
 │   └── integration_tests.rs # Library integration tests (15 tests)
@@ -82,6 +84,39 @@ prepend/
 ```
 
 The project is structured as both a binary and library crate. Core functionality is exposed through `lib.rs` for testing and potential reuse.
+
+### Library API
+
+The library provides a well-documented public API with rustdoc comments:
+
+- **`Config`** - Configuration struct for prepend operations
+- **`parse_arguments()`** - Parse command-line arguments into a Config
+- **`validate_file()`** - Validate file exists, is writable, and is a regular file
+- **`perform_prepend()`** - Safely prepend text to a file using atomic operations
+- **`print_help()`** - Display help information
+
+#### Error Handling
+
+The library uses a custom `PrependError` type instead of strings for better error handling:
+
+```rust
+pub enum PrependError {
+    FileNotFound(String),
+    NotAFile(String),
+    NotWritable(String),
+    EmptyInput,
+    Io(io::Error),
+}
+```
+
+This provides type-safe error handling with automatic conversion from `io::Error`.
+
+#### Constants Module
+
+Shared constants are centralized in `constants.rs`:
+- ANSI color codes for terminal output
+- Allowed file extensions list
+- Buffer size configuration
 
 ## Supported File Types
 
